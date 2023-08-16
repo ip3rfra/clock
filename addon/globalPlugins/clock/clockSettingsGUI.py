@@ -65,7 +65,7 @@ class ClockSettingsPanel(SettingsPanel):
 		self._timeReportSound = _("Clock chime &sound:")
 
 		# Translators: This is the label for a checkbox in the Clock settings dialog.
-		self._useDifferentSynthesizer = _("Use a different &synthesizer for automatic time announcement")
+		self._useAlternateSynthesizer = _("Use alternate &synthesizer for automatic time announcement")
 
 		# Translators: This is the label for a combo box in the Clock settings dialog.
 		self._selectSynthesizer = _("Select synthesizer:")
@@ -120,8 +120,8 @@ class ClockSettingsPanel(SettingsPanel):
 		self._timeReportSoundChoice = clockSettingsGuiHelper.addLabeledControl(
 			self._timeReportSound, wx.Choice, choices=paths.LIST_SOUNDS
 		)
-		self._useDifferentSynthesizerCheckBox = clockSettingsGuiHelper.addItem(
-			wx.CheckBox(self, label=self._useDifferentSynthesizer)
+		self._useAlternateSynthesizerCheckBox = clockSettingsGuiHelper.addItem(
+			wx.CheckBox(self, label=self._useAlternateSynthesizer)
 		)
 		self._selectSynthesizerChoice = clockSettingsGuiHelper.addLabeledControl(
 			self._selectSynthesizer, wx.Choice, choices=self.synthNames
@@ -169,7 +169,7 @@ class ClockSettingsPanel(SettingsPanel):
 		self._timeReportSoundChoice.SetStringSelection(config.conf["clockAndCalendar"]["timeReportSound"])
 		self._timeReportSoundChoice.Bind(wx.EVT_CHOICE, self.onSoundSelected)
 		self._autoAnnounceChoice.Bind(wx.EVT_CHOICE, self.onAutoAnnounce)
-		self._useDifferentSynthesizerCheckBox.Bind(wx.EVT_CHECKBOX, self.onUseDifferentSynthesizerToggle)
+		self._useAlternateSynthesizerCheckBox.Bind(wx.EVT_CHECKBOX, self.onUseDifferentSynthesizerToggle)
 		self._selectSynthesizerChoice.Bind(wx.EVT_CHOICE, self.onSynthesizerChange)
 		self._quietHoursCheckBox.Bind(wx.EVT_CHECKBOX, self.onQuietHoursToggle)
 		self._input24HourFormatChoice.Bind(wx.EVT_CHOICE, self.onInput24HourFormat)
@@ -193,17 +193,20 @@ class ClockSettingsPanel(SettingsPanel):
 
 	def onUseDifferentSynthesizerToggle(self, evt):
 		evt.Skip()
-		self._selectSynthesizerChoice.Enable(self._useDifferentSynthesizerCheckBox.GetValue())
-		self._selectVoiceChoice.Enable(self._useDifferentSynthesizerCheckBox.GetValue())
+		self._selectSynthesizerChoice.Enable(self._useAlternateSynthesizerCheckBox.GetValue())
+		self._selectVoiceChoice.Enable(self._useAlternateSynthesizerCheckBox.GetValue())
 
 	def onSynthesizerChange(self, evt):
 		evt.Skip()
+		self.refreshVoiceList()
+
+	def refreshVoiceList(self):
 		selectedSynthesizer = self.synthIds[self._selectSynthesizerChoice.GetSelection()]
 		savedSynthName = synthDriverHandler.getSynth().name
 		synthDriverHandler.setSynth(selectedSynthesizer)
 		selectedSynthVoices = synthDriverHandler.getSynth().availableVoices
 		selectedSynthVoiceNames = [voice.displayName for voice in selectedSynthVoices.values()]
-		selectedSynthVoiceIds = list(voices.keys())
+		self.selectedSynthVoiceIds = list(selectedSynthVoices.keys())
 		self._selectVoiceChoice.SetItems(selectedSynthVoiceNames)
 		self._selectVoiceChoice.SetSelection(0)
 		synthDriverHandler.setSynth(savedSynthName)
@@ -270,6 +273,20 @@ class ClockSettingsPanel(SettingsPanel):
 		self.startMinEntry.Enable(self._quietHoursCheckBox.IsChecked() and self._quietHoursCheckBox.IsEnabled())
 		self.endHourEntry.Enable(self._quietHoursCheckBox.IsChecked() and self._quietHoursCheckBox.IsEnabled())
 		self.endMinEntry.Enable(self._quietHoursCheckBox.IsChecked() and self._quietHoursCheckBox.IsEnabled())
+		self._useAlternateSynthesizerCheckBox.SetValue(config.conf["clockAndCalendar"]["useAlternateSynthesizer"])
+		self._selectSynthesizerChoice.Enable(self._useAlternateSynthesizerCheckBox.IsChecked() and self._useAlternateSynthesizerCheckBox.IsEnabled())
+		self._selectVoiceChoice.Enable(self._useAlternateSynthesizerCheckBox.IsChecked() and self._useAlternateSynthesizerCheckBox.IsEnabled())
+		savedSynthId = config.conf["clockAndCalendar"]["alternateSynth"]
+		savedSynthVoiceId = config.conf["clockAndCalendar"]["alternateSynthVoice"]
+		if savedSynthId in self.synthIds:
+			self._selectSynthesizerChoice.SetSelection(self.synthIds.index(savedSynthId))
+		else:
+			self._selectSynthesizerChoice.SetSelection(0)
+		self.refreshVoiceList()
+		if savedSynthVoiceId in self.selectedSynthVoiceIds:
+			self._selectVoiceChoice.SetSelection(self.selectedSynthVoiceIds.index(savedSynthVoiceId))
+		else:
+			self._selectVoiceChoice.SetSelection(0)
 
 	def onSave(self):
 		config.conf["clockAndCalendar"]["timeDisplayFormat"] = self._timeDisplayFormatChoice.GetSelection()
@@ -278,6 +295,17 @@ class ClockSettingsPanel(SettingsPanel):
 		config.conf["clockAndCalendar"]["autoAnnounce"] = self._autoAnnounceChoice.GetSelection()
 		config.conf["clockAndCalendar"]["timeReporting"] = self._timeReportChoice.GetSelection()
 		config.conf["clockAndCalendar"]["timeReportSound"] = self._timeReportSoundChoice.GetStringSelection()
+		config.conf["clockAndCalendar"]["useAlternateSynthesizer"] = self._useAlternateSynthesizerCheckBox.GetValue()
+		selectedSynthIndex = self._selectSynthesizerChoice.GetSelection()
+		selectedVoiceIndex = self._selectVoiceChoice.GetSelection()
+		if selectedSynthIndex != wx.NOT_FOUND and selectedSynthIndex < len(self.synthIds):
+			config.conf["clockAndCalendar"]["alternateSynth"] = self.synthIds[selectedSynthIndex]
+		else:
+			config.conf["clockAndCalendar"]["alternateSynth"] = ""
+		if selectedVoiceIndex != wx.NOT_FOUND and selectedVoiceIndex < len(self.selectedSynthVoiceIds):
+			config.conf["clockAndCalendar"]["alternateSynthVoice"] = self.selectedSynthVoiceIds[selectedVoiceIndex]
+		else:
+			config.conf["clockAndCalendar"]["alternateSynthVoice"] = ""
 		quietHours = self._quietHoursCheckBox.GetValue()
 		config.conf["clockAndCalendar"]["quietHours"] = quietHours
 		quietHoursStartTime = ""
