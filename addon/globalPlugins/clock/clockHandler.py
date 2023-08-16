@@ -10,6 +10,7 @@ from . import paths
 import config
 import nvwave
 import ui
+import synthDriverHandler
 import os
 import wx
 from . import formats
@@ -73,6 +74,7 @@ class Clock(object):
 		now = datetime.now()
 		if self.quietHoursAreActive():
 			return
+		self.switchToAlternateSynthesizer()
 		waveFile = os.path.join(paths.SOUNDS_DIR, config.conf["clockAndCalendar"]["timeReportSound"])
 		if config.conf["clockAndCalendar"]["timeReporting"] != 1:
 			nvwave.playWaveFile(waveFile)
@@ -96,6 +98,7 @@ class Clock(object):
 						)
 					)
 				)
+		self.switchBackToCurrentSynthesizer()
 
 	def quietHoursAreActive(self) -> bool:
 		if not config.conf["clockAndCalendar"]["quietHours"]:
@@ -110,3 +113,21 @@ class Clock(object):
 		):
 			return True
 		return False
+
+	def switchToAlternateSynthesizer(self):
+		if not config.conf["clockAndCalendar"]["useAlternateSynthesizer"]:
+			return
+		self.currentSynthName = synthDriverHandler.getSynth().name
+		self.currentSynthVoiceId = synthDriverHandler.getSynth().voice
+		configuredSynthId = config.conf["clockAndCalendar"]["alternateSynth"]
+		configuredVoiceId = config.conf["clockAndCalendar"]["alternateSynthVoice"]
+		synthDriverHandler.setSynth(configuredSynthId)
+		availableVoices = synthDriverHandler.getSynth().availableVoices
+		if configuredVoiceId in availableVoices:
+			synthDriverHandler.getSynth().voice = configuredVoiceId
+
+	def switchBackToCurrentSynthesizer(self):
+		if not config.conf["clockAndCalendar"]["useAlternateSynthesizer"]:
+			return
+		synthDriverHandler.setSynth(self.currentSynthName)
+		synthDriverHandler.getSynth().voice = self.currentSynthVoiceId
