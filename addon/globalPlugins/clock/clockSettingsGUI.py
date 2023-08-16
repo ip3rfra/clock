@@ -12,6 +12,7 @@ import nvwave
 import gui
 import os
 import wx
+import synthDriverHandler
 from . import alarmHandler
 from . import dtfunctions
 from gui import SettingsPanel, SettingsDialog
@@ -64,6 +65,18 @@ class ClockSettingsPanel(SettingsPanel):
 		self._timeReportSound = _("Clock chime &sound:")
 
 		# Translators: This is the label for a checkbox in the Clock settings dialog.
+		self._useDifferentSynthesizer = _("Use a different &synthesizer for automatic time announcement")
+
+		# Translators: This is the label for a combo box in the Clock settings dialog.
+		self._selectSynthesizer = _("Select synthesizer:")
+
+		self.synthIds = [synthDesc[0] for synthDesc in synthDriverHandler.getSynthList()]
+		self.synthNames = [synthDesc[1] for synthDesc in synthDriverHandler.getSynthList()]
+
+		# Translators: This is the label for a combo box in the Clock settings dialog.
+		self._selectVoice = _("Select voice:")
+
+		# Translators: This is the label for a checkbox in the Clock settings dialog.
 		self._quietHours = _("&Quiet hours")
 
 		self._quietHourTimeFormatChoices = (
@@ -107,6 +120,15 @@ class ClockSettingsPanel(SettingsPanel):
 		self._timeReportSoundChoice = clockSettingsGuiHelper.addLabeledControl(
 			self._timeReportSound, wx.Choice, choices=paths.LIST_SOUNDS
 		)
+		self._useDifferentSynthesizerCheckBox = clockSettingsGuiHelper.addItem(
+			wx.CheckBox(self, label=self._useDifferentSynthesizer)
+		)
+		self._selectSynthesizerChoice = clockSettingsGuiHelper.addLabeledControl(
+			self._selectSynthesizer, wx.Choice, choices=self.synthNames
+		)
+		self._selectVoiceChoice = clockSettingsGuiHelper.addLabeledControl(
+			self._selectVoice, wx.Choice, choices=[]
+		)
 		self._quietHoursCheckBox = clockSettingsGuiHelper.addItem(
 			wx.CheckBox(self, label=self._quietHours)
 		)
@@ -147,6 +169,8 @@ class ClockSettingsPanel(SettingsPanel):
 		self._timeReportSoundChoice.SetStringSelection(config.conf["clockAndCalendar"]["timeReportSound"])
 		self._timeReportSoundChoice.Bind(wx.EVT_CHOICE, self.onSoundSelected)
 		self._autoAnnounceChoice.Bind(wx.EVT_CHOICE, self.onAutoAnnounce)
+		self._useDifferentSynthesizerCheckBox.Bind(wx.EVT_CHECKBOX, self.onUseDifferentSynthesizerToggle)
+		self._selectSynthesizerChoice.Bind(wx.EVT_CHOICE, self.onSynthesizerChange)
 		self._quietHoursCheckBox.Bind(wx.EVT_CHECKBOX, self.onQuietHoursToggle)
 		self._input24HourFormatChoice.Bind(wx.EVT_CHOICE, self.onInput24HourFormat)
 		self.setValues()
@@ -166,6 +190,23 @@ class ClockSettingsPanel(SettingsPanel):
 
 	def onSoundSelected(self, evt):
 		return nvwave.playWaveFile(os.path.join(paths.SOUNDS_DIR, evt.GetString()))
+
+	def onUseDifferentSynthesizerToggle(self, evt):
+		evt.Skip()
+		self._selectSynthesizerChoice.Enable(self._useDifferentSynthesizerCheckBox.GetValue())
+		self._selectVoiceChoice.Enable(self._useDifferentSynthesizerCheckBox.GetValue())
+
+	def onSynthesizerChange(self, evt):
+		evt.Skip()
+		selectedSynthesizer = self.synthIds[self._selectSynthesizerChoice.GetSelection()]
+		savedSynthName = synthDriverHandler.getSynth().name
+		synthDriverHandler.setSynth(selectedSynthesizer)
+		selectedSynthVoices = synthDriverHandler.getSynth().availableVoices
+		selectedSynthVoiceNames = [voice.displayName for voice in selectedSynthVoices.values()]
+		selectedSynthVoiceIds = list(voices.keys())
+		self._selectVoiceChoice.SetItems(selectedSynthVoiceNames)
+		self._selectVoiceChoice.SetSelection(0)
+		synthDriverHandler.setSynth(savedSynthName)
 
 	def onQuietHoursToggle(self, evt):
 		evt.Skip()
