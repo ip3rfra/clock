@@ -35,6 +35,21 @@ def getWaveFileDuration(sound: str) -> int:
 		duration = frames / rate
 	return int(duration)
 
+def getApproxSpeechDuration(message: str) -> int:
+	"""
+	Get the approximate duration for a given message to be spoken, in milliseconds.
+	Note: This is a basic heuristic and may not be entirely accurate for all synthesizers 
+	or languages. The method estimates the speech duration based on an average speech 
+	rate of 200ms per word. This is a generalization and may vary depending on the 
+	actual synthesizer's speed settings and the natural duration of specific words.
+	@param message: The message string for which we want to estimate the speech duration.
+	@type message: str
+	@return: The estimated time in milliseconds it would take for the message to be spoken.
+	@rtype: int
+	"""
+	words = message.split()
+	return len(words) * 200 # 200ms per word is an estimate
+
 
 AutoAnnounceIntervalEvery10Mins = 1
 AutoAnnounceIntervalEvery15Mins = 2
@@ -74,31 +89,24 @@ class Clock(object):
 		now = datetime.now()
 		if self.quietHoursAreActive():
 			return
-		self.switchToAlternateSynthesizer()
+		totalDelay = 5000
 		waveFile = os.path.join(paths.SOUNDS_DIR, config.conf["clockAndCalendar"]["timeReportSound"])
 		if config.conf["clockAndCalendar"]["timeReporting"] != 1:
 			nvwave.playWaveFile(waveFile)
 		if config.conf["clockAndCalendar"]["timeReporting"] != 2:
+			msg = GetTimeFormatEx(None, None, now, formats.rgx.sub(formats.repl, formats.timeFormats[config.conf['clockAndCalendar']['timeDisplayFormat']]))
+			totalDelay += getApproxSpeechDuration(msg)
 			if config.conf["clockAndCalendar"]["timeReporting"] == 0:
 				waveFileDuration = getWaveFileDuration(waveFile)
-				wx.CallLater(
-					10 + (1000 * waveFileDuration),
-					ui.message,
-					GetTimeFormatEx(
-						None, None, now, formats.rgx.sub(
-							formats.repl, formats.timeFormats[config.conf['clockAndCalendar']['timeDisplayFormat']]
-						)
-					)
-				)
+				totalWaveFileDuration = 10 + (1000 * waveFileDuration)
+				totalDelay += totalWaveFileDuration
+				self.switchToAlternateSynthesizer()
+				wx.CallLater(totalWaveFileDuration, ui.message, msg)
+				wx.CallLater(totalDelay, self.switchBackToCurrentSynthesizer)
 			else:
-				ui.message(
-					GetTimeFormatEx(
-						None, None, now, formats.rgx.sub(
-							formats.repl, formats.timeFormats[config.conf['clockAndCalendar']['timeDisplayFormat']]
-						)
-					)
-				)
-		self.switchBackToCurrentSynthesizer()
+				self.switchToAlternateSynthesizer()
+				ui.message(msg)
+				wx.CallLater(totalDelay, self.switchBackToCurrentSynthesizer)
 
 	def quietHoursAreActive(self) -> bool:
 		if not config.conf["clockAndCalendar"]["quietHours"]:
